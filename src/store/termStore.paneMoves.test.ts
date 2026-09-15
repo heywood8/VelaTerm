@@ -169,6 +169,63 @@ describe("openSessionInPane", () => {
   });
 });
 
+describe("splitting a tiled tab", () => {
+  it("splits the pane the split was requested for", async () => {
+    seed(["L", "C1", "N3"]);
+    const st = useTermStore.getState();
+    for (const id of ["L", "C1", "N3"]) st.openSession(id, { newTab: true });
+    useTermStore.getState().tileSessions(["L", "C1", "N3"]);
+
+    // Tiling focuses L, so request the split on N3 to prove the requested pane wins over the default focus.
+    expect(useTermStore.getState().activeSessionId).toBe("L");
+    const tree = useTermStore.getState().paneTrees.L;
+    const bottomRightPane = findBySession(tree, "N3")!.paneId;
+    useTermStore.getState().focusPane(bottomRightPane, "N3");
+    await useTermStore.getState().splitNew("vertical", "pane-button");
+
+    const s = useTermStore.getState();
+    const grid = s.paneTrees[s.activeTabId!];
+    const eph = Object.keys(s.ephemeralSessions)[0];
+    expect(grid.kind === "split" && grid.a).toEqual(findBySession(tree, "L"));
+    expect(grid.kind === "split" && collectSessionIds(grid.b)).toEqual(["C1", "N3", eph]);
+    const n3Split = grid.kind === "split" && grid.b.kind === "split" ? grid.b.b : null;
+    expect(n3Split?.kind === "split" && n3Split.dir).toBe("vertical");
+  });
+});
+
+describe("placing a session after closing panes", () => {
+  it("still places a closed session beside a fresh split terminal", async () => {
+    seed(["L", "C1", "N3"]);
+    const st = useTermStore.getState();
+    for (const id of ["L", "C1", "N3"]) st.openSession(id, { newTab: true });
+    useTermStore.getState().tileSessions(["L", "C1", "N3"]);
+
+    for (const id of ["N3", "C1"]) {
+      const s = useTermStore.getState();
+      s.focusPane(findBySession(s.paneTrees[s.activeTabId!], id)!.paneId, id);
+      useTermStore.getState().closePane();
+    }
+    let s = useTermStore.getState();
+    s.focusPane(findBySession(s.paneTrees[s.activeTabId!], "L")!.paneId, "L");
+    await useTermStore.getState().splitNew("vertical", "pane-button");
+
+    s = useTermStore.getState();
+    const eph = Object.keys(s.ephemeralSessions)[0];
+    const ephPane = findBySession(s.paneTrees[s.activeTabId!], eph)!.paneId;
+    useTermStore.getState().openSessionInSplit("C1", "horizontal", { paneId: ephPane, source: "drop" });
+
+    s = useTermStore.getState();
+    const tree = s.paneTrees[s.activeTabId!];
+    expect(collectSessionIds(tree)).toEqual(["L", eph, "C1"]);
+    // [L over [eph | C1]]: the drop split the fresh terminal sideways, as requested.
+    const lower = tree.kind === "split" ? tree.b : null;
+    expect(tree.kind === "split" && tree.dir).toBe("vertical");
+    expect(lower?.kind === "split" && [lower.dir, collectSessionIds(lower)]).toEqual(["horizontal", [eph, "C1"]]);
+    expect(s.activeSessionId).toBe("C1");
+    expect(s.focusedPaneId).toBe(findBySession(tree, "C1")!.paneId);
+  });
+});
+
 describe("tileSessions", () => {
   it("tiles sessions from several tabs into one pinned 2×2 tab", () => {
     seed(["A", "B", "C", "D"]);

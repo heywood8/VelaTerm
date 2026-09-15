@@ -9,6 +9,7 @@ import { useT } from "../../i18n";
 import { isShareSurface } from "../../ipc/shareBase";
 import { navigateSharedSession, sharedSessionUrl } from "../../sharing/sessionNavigation";
 import {
+  isVisibleSession,
   type SelNode,
   type SidebarTreeView,
   useTermStore,
@@ -139,18 +140,21 @@ interface SessionRowProps {
 }
 
 /** Session-row states remain independent. `active` means opened in the center pane, while `selected` means membership
- *  in tree selection. An active session excluded from a multi-selection must not appear selected. Exported only for
- *  state-combination regression tests. */
+ *  in tree selection. An active session excluded from a multi-selection must not appear selected. `inView` marks the
+ *  other panes of the active tab, drawn as a quieter version of the active row. Exported only for state-combination
+ *  regression tests. */
 export function sessionRowClassName(
   selected: boolean,
   active: boolean,
   context: boolean,
   unread: boolean,
+  inView = false,
 ) {
   return (
     "row session" +
     (selected ? " sel" : "") +
     (active ? " active" : "") +
+    (inView && !active ? " in-view" : "") +
     (context ? " context" : "") +
     (unread ? " unread" : "")
   );
@@ -166,6 +170,8 @@ const SessionRow = memo(function SessionRow(p: SessionRowProps) {
   // Subscribe to the derived status string so Object.is suppresses rerenders when runtime identity alone changes.
   const status = useTermStore((st) => effectiveStatus(st.runtimes[s.id]));
   const active = useTermStore((st) => st.activeSessionId === s.id);
+  // Shown in another pane of the active tab. A single-pane tab only holds the active session, so it marks nothing.
+  const inView = useTermStore((st) => st.activeSessionId !== s.id && isVisibleSession(st, s.id));
   const unread = useTermStore((st) => s.id in st.notifications);
   const selected = useTermStore((st) => st.selection.some((x) => x.id === s.id));
   const isBrowser = s.kind === "browser";
@@ -187,7 +193,7 @@ const SessionRow = memo(function SessionRow(p: SessionRowProps) {
   };
   return (
     <div
-      className={sessionRowClassName(selected, active, p.context, unread)}
+      className={sessionRowClassName(selected, active, p.context, unread, inView)}
       style={{ paddingLeft: 6 + p.depth * 13, ...p.dragHighlight }}
       {...dndProps}
       onMouseDown={p.onMouseDownRow}

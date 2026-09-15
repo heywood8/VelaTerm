@@ -1550,7 +1550,10 @@ function agentNotifyText(state: AgentState): string {
 }
 
 /** Returns whether a session is visible in any pane of the active tab. */
-function isVisibleSession(store: TermStore, sessionId: string): boolean {
+export function isVisibleSession(
+  store: Pick<TermStore, "activeTabId" | "paneTrees">,
+  sessionId: string,
+): boolean {
   const tree = store.activeTabId ? store.paneTrees[store.activeTabId] : null;
   return !!tree && collectSessionIds(tree).includes(sessionId);
 }
