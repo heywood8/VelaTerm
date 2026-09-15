@@ -23,6 +23,7 @@ import {
 } from "../../types";
 import { MARK_LABEL_KEYS, type NodeMark, normalizeMark } from "../../marks";
 import { SessionKindIcon } from "../sessionViewers/sessionMeta";
+import { SESSION_DRAG_MIME, SESSION_MULTI_DRAG_MIME } from "../CenterPane/paneDrop";
 import { DEFAULT_BINDINGS, formatCombo } from "../../hooks/shortcutRegistry";
 import { useGitBranch } from "../../hooks/useGitBranch";
 import { stripControlChars, useCtrlCharGuard } from "../../hooks/textInputGuards";
@@ -847,6 +848,13 @@ export function ProjectTree(h: TreeHandlers) {
       if (ids.length >= 2) out = { ...payload, ids };
     }
     e.dataTransfer.setData("text/plain", JSON.stringify(out));
+    // Sessions can also be dropped onto the center pane to split or fill a pane there. Browser nodes open in their
+    // own tabs and cannot join a pane tree, so they are left out and a browser-only drag offers no pane preview.
+    if (out.kind === "session") {
+      const paneIds = (out.ids ?? [out.id]).filter((id) => sessionsById.get(id)?.kind !== "browser");
+      if (paneIds.length > 0) e.dataTransfer.setData(SESSION_DRAG_MIME, JSON.stringify(paneIds));
+      if (paneIds.length > 1) e.dataTransfer.setData(SESSION_MULTI_DRAG_MIME, "");
+    }
     e.dataTransfer.effectAllowed = "move";
     setRowDragImage(e, out.ids?.length);
   };
